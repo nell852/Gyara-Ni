@@ -1,0 +1,25 @@
+[v0] Creating Supabase client with URL: https://aguxutoxwuejtsbdkogy.supabase.co
+[v0] Supabase client created successfully
+[v0] Creating Supabase client with URL: https://aguxutoxwuejtsbdkogy.supabase.co
+[v0] Supabase client created successfully
+[v0] Attempting login for: zamatek237@gmail.com
+[v0] Creating Supabase client with URL: https://aguxutoxwuejtsbdkogy.supabase.co
+[v0] Login error: 
+AuthApiError {__isAuthError: true, name: "AuthApiError", status: 401, code: undefined}
+code: undefined
+name: "AuthApiError"
+status: 401
+__isAuthError: true
+message: "Invalid API key"
+stack: "AuthApiError: Invalid API key↵ at handleError (webpack-internal:///(app-pages-browser)/./node_modules/@supabase/auth-js/dist/module/lib/fetch.js:80:11)↵ at async _handleRequest (webpack-internal:///(app-pages-browser)/./node_modules/@supabase/auth-js/dist/module/lib/fetch.js:123:9)↵ at async _request (webpack-internal:///(app-pages-browser)/./node_modules/@supabase/auth-js/dist/module/lib/fetch.js:105:18)↵ at async SupabaseAuthClient.signInWithPassword (webpack-internal:///(app-pages-browser)/./node_modules/@supabase/auth-js/dist/module/GoTrueClient.js:393:23)↵ at async handleLogin (webpack-internal:///(app-pages-browser)/./app/auth/login/page.tsx:78:31)"
+get stack: ƒ ()
+set stack: ƒ ()
+[[Prototype]]: Object
+
+at t.value (https://451430b0-b8cb-47a4-9e10-910a7440ba8e-00-2lcj3z1k20ljv.spock.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://451430b0-b8cb-47a4-9e10-910a7440ba8e-00-2lcj3z1k20ljv.spock.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://451430b0-b8cb-47a4-9e10-910a7440ba8e-00-2lcj3z1k20ljv.spock.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://451430b0-b8cb-47a4-9e10-910a7440ba8e-00-2lcj3z1k20ljv.spock.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+[v0] Login failed: 
+AuthApiError {__isAuthError: true, name: "AuthApiError", status: 401, code: undefined}
+

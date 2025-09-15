@@ -1,0 +1,62 @@
+{
+  "name": "Gyara Ni - Inventory Management",
+  "short_name": "Gyara Ni",
+  "description": "Système de gestion d'inventaire - Taste the Boldness!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ea7c1b",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "fr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/logo.jpg",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Produits",
+      "short_name": "Produits",
+      "url": "/dashboard/products",
+      "icons": [
+        {
+          "src": "/logo.jpg",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Commandes",
+      "short_name": "Commandes",
+      "url": "/dashboard/orders",
+      "icons": [
+        {
+          "src": "/logo.jpg",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}

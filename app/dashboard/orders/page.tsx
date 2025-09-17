@@ -11,11 +11,20 @@ import { Skeleton } from "@/components/ui/skeleton"
 async function OrdersContent() {
   const supabase = await createClient()
 
-  // Sélectionne toutes les colonnes, y compris created_at et updated_at
-  const { data: orders } = await supabase
+  // Sélectionne toutes les colonnes, plus les relations nécessaires
+  const { data: orders, error } = await supabase
     .from("orders")
     .select(`
-      *,
+      id,
+      order_number,
+      customer_name,
+      customer_phone,
+      status,
+      total_amount,
+      payment_method,
+      payment_status,
+      created_at,
+      updated_at,
       order_items (
         id,
         quantity,
@@ -23,9 +32,17 @@ async function OrdersContent() {
         total_price,
         products (name)
       ),
-      profiles!created_by (full_name)
+      profiles!created_by (
+        full_name,
+        role
+      )
     `)
     .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("Erreur lors du chargement des commandes:", error.message)
+    return <div className="text-red-500 p-4">Impossible de charger les commandes.</div>
+  }
 
   return <OrdersTable orders={orders || []} />
 }

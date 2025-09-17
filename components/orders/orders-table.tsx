@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table"
@@ -33,7 +33,7 @@ interface Order {
     total_price: number
     products: { name: string } | null
   }[]
-  profiles: { full_name: string; role: string } | null
+  profiles: { full_name: string } | null
 }
 
 interface OrdersTableProps {
@@ -46,9 +46,27 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
+
+  // Récupérer le rôle de l'utilisateur connecté
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      if (!error && user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single()
+        setUserRole(profile?.role || null)
+      }
+    }
+    fetchUserRole()
+  }, [])
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -58,8 +76,11 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     return matchesSearch && matchesStatus
   })
 
-  // --- Mise à jour atomique ---
-  const updateOrderAndPaymentStatus = async (orderId: string, newOrderStatus: string, newPaymentStatus: string) => {
+  const updateOrderAndPaymentStatus = async (
+    orderId: string,
+    newOrderStatus: string,
+    newPaymentStatus: string
+  ) => {
     setIsUpdating(true)
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -90,27 +111,22 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   }
 
   const deleteOrder = async (orderId: string) => {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      toast({ title: "Erreur", description: "Utilisateur non connecté", variant: "destructive" })
-      return
-    }
-
-    if (user.role !== "admin") {
-      toast({ title: "Erreur", description: "Seuls les admins peuvent supprimer une commande", variant: "destructive" })
-      return
-    }
-
     if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return
-
-    const { error } = await supabase.from("orders").delete().eq("id", orderId)
-    if (error) {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" })
-      return
+    setIsUpdating(true)
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", orderId)
+      if (error) throw error
+      router.refresh()
+      toast({ title: "Succès", description: "Commande supprimée." })
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Erreur lors de la suppression",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUpdating(false)
     }
-
-    toast({ title: "Succès", description: "Commande supprimée" })
-    router.refresh()
   }
 
   const handleEditOrder = (order: Order) => {
@@ -151,9 +167,11 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Liste des commandes</CardTitle>
-        <div className="flex items-center gap-4">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <CardTitle className="truncate">Liste des commandes</CardTitle>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -186,14 +204,14 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Commande</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Vendeur</TableHead>
-                <TableHead>Articles</TableHead>
+                <TableHead className="hidden sm:table-cell">Client</TableHead>
+                <TableHead className="hidden md:table-cell">Articles</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead>Paiement</TableHead>
-                <TableHead>Créée le</TableHead>
-                <TableHead>Mise à jour le</TableHead>
+                <TableHead className="hidden lg:table-cell">Paiement</TableHead>
+                <TableHead className="hidden xl:table-cell">Créée le</TableHead>
+                <TableHead className="hidden xl:table-cell">Mise à jour le</TableHead>
+                <TableHead className="hidden lg:table-cell">Vendeur</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -202,27 +220,43 @@ export function OrdersTable({ orders }: OrdersTableProps) {
               {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell>
-                    <div className="font-medium">{order.order_number}</div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
-                    <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="font-medium">{order.profiles?.full_name || "Vendeur inconnu"}</div>
-                  </TableCell>
-
-                  <TableCell>
-                    {order.order_items.map((item) => (
-                      <div key={item.id}>
-                        {item.quantity}x {item.products?.name}
+                    <div>
+                      <div className="font-medium">{order.order_number}</div>
+                      <div className="text-sm text-muted-foreground sm:hidden">
+                        {order.customer_name || "Client anonyme"}
                       </div>
-                    ))}
+                      <div className="text-sm text-muted-foreground md:hidden">
+                        {getItemsCount(order.order_items)} article(s)
+                      </div>
+                    </div>
                   </TableCell>
 
-                  <TableCell>{formatPrice(order.total_amount)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <div>
+                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden md:table-cell">
+                    <div className="text-sm">
+                      <div>{getItemsCount(order.order_items)} article(s)</div>
+                      <div className="text-muted-foreground">
+                        {order.order_items.slice(0, 2).map((item) => (
+                          <div key={item.id}>
+                            {item.quantity}x {item.products?.name}
+                          </div>
+                        ))}
+                        {order.order_items.length > 2 && (
+                          <div>+{order.order_items.length - 2} autres...</div>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="font-medium">{formatPrice(order.total_amount)}</div>
+                  </TableCell>
 
                   <TableCell>
                     <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1 w-fit">
@@ -231,25 +265,36 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                     </Badge>
                   </TableCell>
 
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     <Badge variant={getPaymentStatusVariant(order.payment_status)}>
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
 
-                  <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
-                  <TableCell>{new Date(order.updated_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell className="hidden xl:table-cell">
+                    {new Date(order.created_at).toLocaleString("fr-FR")}
+                  </TableCell>
 
-                  <TableCell className="flex gap-2">
+                  <TableCell className="hidden xl:table-cell">
+                    {new Date(order.updated_at).toLocaleString("fr-FR")}
+                  </TableCell>
+
+                  <TableCell className="hidden lg:table-cell">
+                    {order.profiles?.full_name || "Vendeur inconnu"}
+                  </TableCell>
+
+                  <TableCell className="flex flex-col gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleEditOrder(order)}
-                      className="text-primary hover:text-primary/80"
+                      className="flex items-center gap-1 text-primary hover:text-primary/80"
                     >
-                      <Edit className="mr-2 h-4 w-4" /> Modifier
+                      <Edit className="h-4 w-4" />
+                      Modifier
                     </Button>
-                    {order.profiles?.role === "admin" && (
+
+                    {userRole === "admin" && (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -271,7 +316,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
         )}
       </CardContent>
 
-      {/* Dialog pour modifier */}
+      {/* Dialog d’édition */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

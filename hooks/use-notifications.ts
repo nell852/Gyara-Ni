@@ -32,8 +32,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   // Validation d'UUID
   const isValidUUID = (id: string) => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(id);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(id)
   }
 
   const fetchNotifications = async () => {
@@ -70,8 +70,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const markAsRead = async (id: string) => {
     try {
       if (!isValidUUID(id)) {
-        console.error(`ID invalide pour markAsRead: ${id}`);
-        throw new Error("L'ID fourni n'est pas un UUID valide");
+        console.error(`ID invalide pour markAsRead: ${id}`)
+        throw new Error("L'ID fourni n'est pas un UUID valide")
       }
       console.log(`Tentative de marquage comme lu pour la notification ID: ${id}`)
       const { data, error } = await supabase
@@ -122,8 +122,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const deleteNotification = async (id: string) => {
     try {
       if (!isValidUUID(id)) {
-        console.error(`ID invalide pour deleteNotification: ${id}`);
-        throw new Error("L'ID fourni n'est pas un UUID valide");
+        console.error(`ID invalide pour deleteNotification: ${id}`)
+        throw new Error("L'ID fourni n'est pas un UUID valide")
       }
       console.log(`Tentative de suppression de la notification ID: ${id}`)
       const { error } = await supabase

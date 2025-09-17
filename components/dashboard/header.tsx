@@ -1,5 +1,4 @@
 "use client"
-
 import React from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,6 +16,7 @@ import { useRouter } from "next/navigation"
 import { User, LogOut, Settings, Moon, Sun, Globe } from "lucide-react"
 import dynamic from "next/dynamic"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { useNotifications } from "@/hooks/use-notifications"
 
 // Lazy load notification bell
 const NotificationBell = dynamic(
@@ -38,6 +38,7 @@ interface HeaderProps {
 export function DashboardHeader({ user }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
+  const { unreadCount } = useNotifications() // Utiliser le hook pour obtenir unreadCount
   const [theme, setTheme] = React.useState<'light' | 'dark'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'
   )
@@ -76,9 +77,8 @@ export function DashboardHeader({ user }: HeaderProps) {
           Tableau de bord
         </h1>
       </div>
-
       <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-        <NotificationBell />
+        <NotificationBell unreadCount={unreadCount} /> {/* Passer unreadCount */}
         <Button
           variant="ghost"
           size="sm"
@@ -97,7 +97,6 @@ export function DashboardHeader({ user }: HeaderProps) {
         >
           <Globe className="h-4 w-4" />
         </Button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <div
@@ -111,7 +110,6 @@ export function DashboardHeader({ user }: HeaderProps) {
               </Avatar>
             </div>
           </DropdownMenuTrigger>
-
           <DropdownMenuPortal>
             <DropdownMenuContent className="w-56 z-[200]" align="end" side="bottom" forceMount>
               <DropdownMenuLabel className="font-normal">

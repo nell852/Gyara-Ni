@@ -1,48 +1,59 @@
 "use client"
-
 import { Button } from "@/components/ui/button"
-import { CheckCheck, Trash2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
+import { Bell, CheckCheck, Trash2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
 
-export function NotificationActions() {
+export function NotificationActions({
+  unreadCount,
+  markAllAsRead,
+  deleteAllRead,
+}: {
+  unreadCount: number
+  markAllAsRead: () => Promise<void>
+  deleteAllRead: () => Promise<void>
+}) {
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = createClient()
 
-  const markAllAsRead = async () => {
+  const handleMarkAllAsRead = async () => {
     setLoading(true)
     try {
-      await supabase.from("notifications").update({ is_read: true }).eq("is_read", false)
-
-      router.refresh()
+      await markAllAsRead()
     } catch (error) {
-      console.error("Error marking notifications as read:", error)
+      console.error("Erreur lors du marquage de toutes les notifications comme lues :", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const deleteAllRead = async () => {
+  const handleDeleteAllRead = async () => {
     setLoading(true)
     try {
-      await supabase.from("notifications").delete().eq("is_read", true)
-
-      router.refresh()
+      await deleteAllRead()
     } catch (error) {
-      console.error("Error deleting notifications:", error)
+      console.error("Erreur lors de la suppression des notifications lues :", error)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <Button variant="ghost" size="icon" disabled={loading}>
+          <Bell className="h-5 w-5" />
+          <span className="sr-only">Notifications</span>
+        </Button>
+        {unreadCount > 0 && (
+          <Badge className="absolute -top-1 -right-1 bg-orange-500 text-white">
+            {unreadCount}
+          </Badge>
+        )}
+      </div>
       <Button
         variant="outline"
         size="sm"
-        onClick={markAllAsRead}
+        onClick={handleMarkAllAsRead}
         disabled={loading}
         className="flex items-center gap-2 bg-transparent"
       >
@@ -52,7 +63,7 @@ export function NotificationActions() {
       <Button
         variant="outline"
         size="sm"
-        onClick={deleteAllRead}
+        onClick={handleDeleteAllRead}
         disabled={loading}
         className="flex items-center gap-2 bg-transparent"
       >

@@ -204,14 +204,14 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Commande</TableHead>
-                <TableHead className="hidden sm:table-cell">Client</TableHead>
-                <TableHead className="hidden md:table-cell">Articles</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Articles</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead className="hidden lg:table-cell">Paiement</TableHead>
-                <TableHead className="hidden xl:table-cell">Créée le</TableHead>
-                <TableHead className="hidden xl:table-cell">Mise à jour le</TableHead>
-                <TableHead className="hidden lg:table-cell">Vendeur</TableHead>
+                <TableHead>Paiement</TableHead>
+                <TableHead>Créée le</TableHead>
+                <TableHead>Mise à jour le</TableHead>
+                <TableHead>Vendeur</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -219,88 +219,39 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <TableBody>
               {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
+                  <TableCell>{order.order_number}</TableCell>
                   <TableCell>
                     <div>
-                      <div className="font-medium">{order.order_number}</div>
-                      <div className="text-sm text-muted-foreground sm:hidden">
-                        {order.customer_name || "Client anonyme"}
-                      </div>
-                      <div className="text-sm text-muted-foreground md:hidden">
-                        {getItemsCount(order.order_items)} article(s)
-                      </div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="hidden sm:table-cell">
-                    <div>
-                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                      <div>{order.customer_name || "Client anonyme"}</div>
                       <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
                     </div>
                   </TableCell>
-
-                  <TableCell className="hidden md:table-cell">
-                    <div className="text-sm">
-                      <div>{getItemsCount(order.order_items)} article(s)</div>
-                      <div className="text-muted-foreground">
-                        {order.order_items.slice(0, 2).map((item) => (
-                          <div key={item.id}>
-                            {item.quantity}x {item.products?.name}
-                          </div>
-                        ))}
-                        {order.order_items.length > 2 && (
-                          <div>+{order.order_items.length - 2} autres...</div>
-                        )}
-                      </div>
-                    </div>
-                  </TableCell>
-
                   <TableCell>
-                    <div className="font-medium">{formatPrice(order.total_amount)}</div>
+                    {order.order_items.map((item) => (
+                      <div key={item.id}>{item.quantity}x {item.products?.name}</div>
+                    ))}
                   </TableCell>
-
+                  <TableCell>{formatPrice(order.total_amount)}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1 w-fit">
                       {getStatusIcon(order.status)}
                       {getStatusLabel(order.status)}
                     </Badge>
                   </TableCell>
-
-                  <TableCell className="hidden lg:table-cell">
+                  <TableCell>
                     <Badge variant={getPaymentStatusVariant(order.payment_status)}>
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
-
-                  <TableCell className="hidden xl:table-cell">
-                    {new Date(order.created_at).toLocaleString("fr-FR")}
-                  </TableCell>
-
-                  <TableCell className="hidden xl:table-cell">
-                    {new Date(order.updated_at).toLocaleString("fr-FR")}
-                  </TableCell>
-
-                  <TableCell className="hidden lg:table-cell">
-                    {order.profiles?.full_name || "Vendeur inconnu"}
-                  </TableCell>
-
+                  <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell>{new Date(order.updated_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell>{order.profiles?.full_name || "Vendeur inconnu"}</TableCell>
                   <TableCell className="flex flex-col gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditOrder(order)}
-                      className="flex items-center gap-1 text-primary hover:text-primary/80"
-                    >
-                      <Edit className="h-4 w-4" />
-                      Modifier
+                    <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
+                      <Edit className="h-4 w-4" /> Modifier
                     </Button>
-
                     {userRole === "admin" && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteOrder(order.id)}
-                        className="flex items-center gap-1"
-                      >
+                      <Button variant="destructive" size="sm" onClick={() => deleteOrder(order.id)}>
                         <Trash2 className="h-4 w-4" /> Supprimer
                       </Button>
                     )}

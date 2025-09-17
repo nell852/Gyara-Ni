@@ -4,6 +4,7 @@ import { Package, Warehouse, ShoppingCart, DollarSign } from "lucide-react"
 import { Suspense } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 
 // Lazy load heavy chart components to reduce initial bundle size
 const SalesChart = dynamic(() => import("@/components/dashboard/sales-chart").then(mod => ({ default: mod.SalesChart })), {
@@ -28,6 +29,7 @@ const OrderStatusChart = dynamic(() => import("@/components/dashboard/order-stat
 
 async function DashboardStats() {
   const supabase = await createClient()
+  const router = useRouter()
 
   const [
     { count: productsCount },
@@ -77,6 +79,7 @@ async function DashboardStats() {
       icon: DollarSign,
       color: "text-amber-100",
       bgColor: "bg-gradient-to-br from-amber-700 to-amber-800",
+      onClick: () => router.push("/dashboard/orders"),
     },
     {
       title: "Total Produits",
@@ -85,6 +88,7 @@ async function DashboardStats() {
       icon: Package,
       color: "text-amber-100",
       bgColor: "bg-gradient-to-br from-amber-600 to-amber-700",
+      onClick: () => router.push("dashboard/products"),
     },
     {
       title: "Alertes Stock",
@@ -93,6 +97,7 @@ async function DashboardStats() {
       icon: Warehouse,
       color: "text-amber-100",
       bgColor: "bg-gradient-to-br from-amber-800 to-amber-900",
+      onClick: () => router.push("/dashboard/inventory"),
     },
     {
       title: "Commandes Totales",
@@ -101,6 +106,7 @@ async function DashboardStats() {
       icon: ShoppingCart,
       color: "text-amber-100",
       bgColor: "bg-gradient-to-br from-amber-500 to-amber-600",
+      onClick: () => router.push("/dashboard/orders"),
     },
   ]
 
@@ -108,7 +114,11 @@ async function DashboardStats() {
     <>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.title} className={`${stat.bgColor} border-0 shadow-lg hover:shadow-xl transition-shadow duration-300`}>
+          <Card
+            key={stat.title}
+            className={`${stat.bgColor} border-0 shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer`}
+            onClick={stat.onClick}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className={`text-sm font-medium ${stat.color}`}>{stat.title}</CardTitle>
               <stat.icon className={`h-6 w-6 ${stat.color}`} />
@@ -142,7 +152,8 @@ async function DashboardStats() {
               {lowStockItems.map((item: any) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between p-2 bg-orange-50 dark:bg-orange-950/20 rounded-lg"
+                  className="flex items-center justify-between p-2 bg-orange-50 dark:bg-orange-950/20 rounded-lg cursor-pointer hover:bg-orange-100"
+                  onClick={() => router.push(`/products/${item.product_id}`)}
                 >
                   <span className="font-medium">{item.products?.name}</span>
                   <span className="text-sm text-orange-600 dark:text-orange-400">Stock: {item.quantity}</span>

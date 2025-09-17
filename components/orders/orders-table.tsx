@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useState, useEffect } from "react"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -12,6 +14,14 @@ import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2 } from "lucid
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+
+interface OrderItem {
+  id: string
+  quantity: number
+  unit_price: number
+  total_price: number
+  products: { name: string } | null
+}
 
 interface Order {
   id: string
@@ -24,14 +34,8 @@ interface Order {
   payment_status: string
   created_at: string
   updated_at: string
-  order_items: {
-    id: string
-    quantity: number
-    unit_price: number
-    total_price: number
-    products: { name: string } | null
-  }[]
-  profiles: { full_name: string; role: string } | null
+  order_items: OrderItem[]
+  profiles: { full_name: string } | null
 }
 
 interface OrdersTableProps {
@@ -45,9 +49,26 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const router = useRouter()
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
+
   const supabase = createClient()
+  const router = useRouter()
   const { toast } = useToast()
+
+  // Récupérer le rôle de l'utilisateur connecté
+  useEffect(() => {
+    async function fetchUserRole() {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) return
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single()
+      if (!error && data) setCurrentUserRole(data.role)
+    }
+    fetchUserRole()
+  }, [])
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -57,11 +78,11 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     return matchesSearch && matchesStatus
   })
 
+  const getItemsCount = (items: OrderItem[]) =>
+    items.reduce((sum, item) => sum + item.quantity, 0)
+
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(price)
-
-  const getItemsCount = (items: Order["order_items"]) =>
-    items.reduce((sum, item) => sum + item.quantity, 0)
 
   const getStatusIcon = (status: string) => {
     const map: Record<string, JSX.Element> = {
@@ -88,12 +109,8 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const getPaymentStatusVariant = (s: string) =>
     ({ paid: "default", pending: "secondary", refunded: "destructive" }[s] || "outline") as const
 
-  // --- Mise à jour atomique via RPC Supabase ---
-  const updateOrderAndPaymentStatus = async (
-    orderId: string,
-    newOrderStatus: string,
-    newPaymentStatus: string
-  ) => {
+  // Mise à jour de commande et paiement
+  const updateOrderAndPaymentStatus = async (orderId: string, newOrderStatus: string, newPaymentStatus: string) => {
     setIsUpdating(true)
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -113,31 +130,25 @@ export function OrdersTable({ orders }: OrdersTableProps) {
       router.refresh()
       toast({ title: "Succès", description: `Commande ${result.order_number} mise à jour.` })
     } catch (e) {
-      toast({
-        title: "Erreur",
-        description: e instanceof Error ? e.message : "Une erreur inattendue",
-        variant: "destructive"
-      })
+      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Une erreur inattendue", variant: "destructive" })
     } finally {
       setIsUpdating(false)
     }
   }
 
-  // --- Suppression ---
+  // Suppression d'une commande
   const handleDeleteOrder = async (order: Order) => {
+    if (!currentUserRole || currentUserRole !== "admin") return
     if (!confirm(`Voulez-vous vraiment supprimer la commande ${order.order_number} ?`)) return
+
     setIsDeleting(true)
     try {
       const { error } = await supabase.from("orders").delete().eq("id", order.id)
       if (error) throw new Error(error.message)
-      toast({ title: "Commande supprimée", description: `Commande ${order.order_number} supprimée avec succès.` })
+      toast({ title: "Succès", description: `Commande ${order.order_number} supprimée.` })
       router.refresh()
     } catch (e) {
-      toast({
-        title: "Erreur",
-        description: e instanceof Error ? e.message : "Erreur lors de la suppression",
-        variant: "destructive"
-      })
+      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur inattendue", variant: "destructive" })
     } finally {
       setIsDeleting(false)
     }
@@ -199,47 +210,60 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <TableBody>
               {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
-                  <TableCell>{order.order_number}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{order.customer_name}</TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    {order.order_items.map((item) => (
-                      <div key={item.id}>
-                        {item.quantity} x {item.products?.name || "Produit inconnu"}
-                      </div>
-                    ))}
+                  <TableCell>
+                    <div className="font-medium">{order.order_number}</div>
+                    <div className="text-sm text-muted-foreground md:hidden">
+                      {getItemsCount(order.order_items)} article(s)
+                    </div>
                   </TableCell>
+
+                  <TableCell className="hidden sm:table-cell">
+                    <div>
+                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden md:table-cell">
+                    <div className="text-sm">
+                      {order.order_items.map((item) => (
+                        <div key={item.id}>
+                          {item.quantity} x {item.products?.name}
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+
                   <TableCell>{formatPrice(order.total_amount)}</TableCell>
+
                   <TableCell>
                     <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1 w-fit">
-                      {getStatusIcon(order.status)}
-                      {getStatusLabel(order.status)}
+                      {getStatusIcon(order.status)} {getStatusLabel(order.status)}
                     </Badge>
                   </TableCell>
+
                   <TableCell className="hidden lg:table-cell">
                     <Badge variant={getPaymentStatusVariant(order.payment_status)}>
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
+
                   <TableCell className="hidden xl:table-cell">
                     {new Date(order.created_at).toLocaleString("fr-FR")}
                   </TableCell>
+
                   <TableCell className="hidden xl:table-cell">
                     {new Date(order.updated_at).toLocaleString("fr-FR")}
                   </TableCell>
+
                   <TableCell className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
-                      <Edit className="h-4 w-4" />
-                      Modifier
+                      <Edit className="h-4 w-4 mr-1" /> Modifier
                     </Button>
-                    {order.profiles?.role === "admin" && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteOrder(order)}
-                        disabled={isDeleting}
-                      >
-                        <XCircle className="h-4 w-4" />
-                        Supprimer
+
+                    {currentUserRole === "admin" && (
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteOrder(order)} disabled={isDeleting}>
+                        <XCircle className="h-4 w-4 mr-1" /> Supprimer
                       </Button>
                     )}
                   </TableCell>
@@ -254,7 +278,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
         )}
       </CardContent>
 
-      {/* Dialog d’édition */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>

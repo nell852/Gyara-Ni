@@ -3,14 +3,14 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Bell, Package, ShoppingCart, AlertTriangle, CheckCircle, Loader2 } from "lucide-react"
+import { Bell, Package, ShoppingCart, AlertTriangle, CheckCircle, Loader2, Check } from "lucide-react"
 import { NotificationActions } from "@/components/notifications/notification-actions"
 import { useNotifications } from "@/hooks/use-notifications"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 
 export default function NotificationsPage() {
-  const { notifications, loading } = useNotifications()
+  const { notifications, loading, markAsRead } = useNotifications()
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -79,7 +79,20 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {getNotificationBadge(notification.type)}
-                    {!notification.is_read && <div className="h-2 w-2 bg-orange-500 rounded-full" />}
+                    {!notification.is_read && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => markAsRead(notification.id)}
+                          className="bg-transparent hover:bg-green-50 hover:border-green-200"
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Lu
+                        </Button>
+                        <div className="h-2 w-2 bg-orange-500 rounded-full" />
+                      </>
+                    )}
                   </div>
                 </div>
               </CardHeader>

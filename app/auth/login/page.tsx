@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 
@@ -158,12 +157,15 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* --- Bloc Signup désactivé --- */}
+            {/*
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Pas encore de compte ?{" "}
               <Link href="/auth/signup" className="text-primary hover:text-primary/80 underline underline-offset-4">
                 Créer un compte
               </Link>
             </div>
+            */}
           </CardContent>
         </Card>
       </div>

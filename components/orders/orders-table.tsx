@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table"
@@ -10,18 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2 } from "lucide-react"
+import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2, Trash } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-
-interface OrderItem {
-  id: string
-  quantity: number
-  unit_price: number
-  total_price: number
-  products: { name: string } | null
-}
 
 interface Order {
   id: string
@@ -34,8 +26,14 @@ interface Order {
   payment_status: string
   created_at: string
   updated_at: string
-  order_items: OrderItem[]
-  profiles: { full_name: string } | null
+  order_items: {
+    id: string
+    quantity: number
+    unit_price: number
+    total_price: number
+    products: { name: string } | null
+  }[]
+  profiles: { role: string, full_name: string } | null
 }
 
 interface OrdersTableProps {
@@ -48,27 +46,9 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
-
-  const supabase = createClient()
   const router = useRouter()
+  const supabase = createClient()
   const { toast } = useToast()
-
-  // Récupérer le rôle de l'utilisateur connecté
-  useEffect(() => {
-    async function fetchUserRole() {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) return
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single()
-      if (!error && data) setCurrentUserRole(data.role)
-    }
-    fetchUserRole()
-  }, [])
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -78,11 +58,64 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     return matchesSearch && matchesStatus
   })
 
-  const getItemsCount = (items: OrderItem[]) =>
-    items.reduce((sum, item) => sum + item.quantity, 0)
+  // --- mise à jour atomique inchangée ---
+  const updateOrderAndPaymentStatus = async (
+    orderId: string,
+    newOrderStatus: string,
+    newPaymentStatus: string
+  ) => {
+    setIsUpdating(true)
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error("Utilisateur non connecté")
+
+      const { data: result, error: rpcError } = await supabase.rpc("update_order_status_atomic", {
+        p_order_id: orderId,
+        p_order_status: newOrderStatus,
+        p_payment_status: newPaymentStatus,
+        p_user_id: user.id
+      })
+      if (rpcError) throw new Error(`Erreur RPC: ${rpcError.message}`)
+      if (!result?.success) throw new Error(result?.error || "Erreur lors de la mise à jour atomique")
+
+      setIsDialogOpen(false)
+      setEditingOrder(null)
+      router.refresh()
+      toast({ title: "Succès", description: `Commande ${result.order_number} mise à jour.` })
+    } catch (e) {
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Une erreur inattendue",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  // --- supprimer commande ---
+  const deleteOrder = async (orderId: string) => {
+    if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return
+    try {
+      const { error } = await supabase.from("orders").delete().eq("id", orderId)
+      if (error) throw new Error(error.message)
+      toast({ title: "Commande supprimée", variant: "destructive" })
+      router.refresh()
+    } catch (e) {
+      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur inattendue", variant: "destructive" })
+    }
+  }
+
+  const handleEditOrder = (order: Order) => {
+    setEditingOrder(order)
+    setIsDialogOpen(true)
+  }
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(price)
+
+  const getItemsCount = (items: Order["order_items"]) =>
+    items.reduce((sum, item) => sum + item.quantity, 0)
 
   const getStatusIcon = (status: string) => {
     const map: Record<string, JSX.Element> = {
@@ -108,56 +141,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
   const getPaymentStatusVariant = (s: string) =>
     ({ paid: "default", pending: "secondary", refunded: "destructive" }[s] || "outline") as const
-
-  // Mise à jour de commande et paiement
-  const updateOrderAndPaymentStatus = async (orderId: string, newOrderStatus: string, newPaymentStatus: string) => {
-    setIsUpdating(true)
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) throw new Error("Utilisateur non connecté")
-
-      const { data: result, error: rpcError } = await supabase.rpc("update_order_status_atomic", {
-        p_order_id: orderId,
-        p_order_status: newOrderStatus,
-        p_payment_status: newPaymentStatus,
-        p_user_id: user.id
-      })
-      if (rpcError) throw new Error(`Erreur RPC: ${rpcError.message}`)
-      if (!result?.success) throw new Error(result?.error || "Erreur lors de la mise à jour atomique")
-
-      setIsDialogOpen(false)
-      setEditingOrder(null)
-      router.refresh()
-      toast({ title: "Succès", description: `Commande ${result.order_number} mise à jour.` })
-    } catch (e) {
-      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Une erreur inattendue", variant: "destructive" })
-    } finally {
-      setIsUpdating(false)
-    }
-  }
-
-  // Suppression d'une commande
-  const handleDeleteOrder = async (order: Order) => {
-    if (!currentUserRole || currentUserRole !== "admin") return
-    if (!confirm(`Voulez-vous vraiment supprimer la commande ${order.order_number} ?`)) return
-
-    setIsDeleting(true)
-    try {
-      const { error } = await supabase.from("orders").delete().eq("id", order.id)
-      if (error) throw new Error(error.message)
-      toast({ title: "Succès", description: `Commande ${order.order_number} supprimée.` })
-      router.refresh()
-    } catch (e) {
-      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur inattendue", variant: "destructive" })
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  const handleEditOrder = (order: Order) => {
-    setEditingOrder(order)
-    setIsDialogOpen(true)
-  }
 
   return (
     <Card>
@@ -196,13 +179,13 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Commande</TableHead>
-                <TableHead className="hidden sm:table-cell">Client</TableHead>
-                <TableHead className="hidden md:table-cell">Articles</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Articles</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead className="hidden lg:table-cell">Paiement</TableHead>
-                <TableHead className="hidden xl:table-cell">Créée le</TableHead>
-                <TableHead className="hidden xl:table-cell">Mise à jour le</TableHead>
+                <TableHead>Paiement</TableHead>
+                <TableHead>Créée le</TableHead>
+                <TableHead>Mise à jour le</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -212,25 +195,21 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                 <TableRow key={order.id}>
                   <TableCell>
                     <div className="font-medium">{order.order_number}</div>
-                    <div className="text-sm text-muted-foreground md:hidden">
-                      {getItemsCount(order.order_items)} article(s)
-                    </div>
                   </TableCell>
 
-                  <TableCell className="hidden sm:table-cell">
-                    <div>
-                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
-                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
-                    </div>
+                  <TableCell>
+                    <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                    <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
                   </TableCell>
 
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell>
                     <div className="text-sm">
-                      {order.order_items.map((item) => (
-                        <div key={item.id}>
-                          {item.quantity} x {item.products?.name}
-                        </div>
-                      ))}
+                      {getItemsCount(order.order_items)} article(s)
+                      <div className="text-muted-foreground">
+                        {order.order_items.map(item => (
+                          <div key={item.id}>{item.quantity}x {item.products?.name}</div>
+                        ))}
+                      </div>
                     </div>
                   </TableCell>
 
@@ -242,28 +221,23 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                     </Badge>
                   </TableCell>
 
-                  <TableCell className="hidden lg:table-cell">
+                  <TableCell>
                     <Badge variant={getPaymentStatusVariant(order.payment_status)}>
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
 
-                  <TableCell className="hidden xl:table-cell">
-                    {new Date(order.created_at).toLocaleString("fr-FR")}
-                  </TableCell>
-
-                  <TableCell className="hidden xl:table-cell">
-                    {new Date(order.updated_at).toLocaleString("fr-FR")}
-                  </TableCell>
+                  <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell>{new Date(order.updated_at).toLocaleString("fr-FR")}</TableCell>
 
                   <TableCell className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
-                      <Edit className="h-4 w-4 mr-1" /> Modifier
+                      <Edit className="h-4 w-4" />
                     </Button>
 
-                    {currentUserRole === "admin" && (
-                      <Button variant="destructive" size="sm" onClick={() => handleDeleteOrder(order)} disabled={isDeleting}>
-                        <XCircle className="h-4 w-4 mr-1" /> Supprimer
+                    {order.profiles?.role === "admin" && (
+                      <Button variant="destructive" size="sm" onClick={() => deleteOrder(order.id)}>
+                        <Trash className="h-4 w-4" />
                       </Button>
                     )}
                   </TableCell>
@@ -278,84 +252,56 @@ export function OrdersTable({ orders }: OrdersTableProps) {
         )}
       </CardContent>
 
+      {/* Dialog inchangé */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Modifier la commande</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Modifier la commande</DialogTitle></DialogHeader>
           {editingOrder && (
             <div className="space-y-4">
+              <p>Commande: {editingOrder.order_number}</p>
+              <p>Client: {editingOrder.customer_name || "Client anonyme"}</p>
+              <p>Total: {formatPrice(editingOrder.total_amount)}</p>
+
               <div>
-                <h4 className="font-medium mb-2">Commande: {editingOrder.order_number}</h4>
-                <p className="text-sm text-muted-foreground">
-                  Client: {editingOrder.customer_name || "Client anonyme"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Total: {formatPrice(editingOrder.total_amount)}
-                </p>
+                <label className="text-sm font-medium">Statut de la commande</label>
+                <Select
+                  value={editingOrder.status}
+                  onValueChange={(value) => setEditingOrder({ ...editingOrder, status: value })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">En attente</SelectItem>
+                    <SelectItem value="confirmed">Confirmée</SelectItem>
+                    <SelectItem value="preparing">En préparation</SelectItem>
+                    <SelectItem value="ready">Prête</SelectItem>
+                    <SelectItem value="delivered">Livrée</SelectItem>
+                    <SelectItem value="cancelled">Annulée</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium">Statut de la commande</label>
-                  <Select
-                    value={editingOrder.status}
-                    onValueChange={(value) =>
-                      setEditingOrder({ ...editingOrder, status: value })
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">En attente</SelectItem>
-                      <SelectItem value="confirmed">Confirmée</SelectItem>
-                      <SelectItem value="preparing">En préparation</SelectItem>
-                      <SelectItem value="ready">Prête</SelectItem>
-                      <SelectItem value="delivered">Livrée</SelectItem>
-                      <SelectItem value="cancelled">Annulée</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">Statut de paiement</label>
-                  <Select
-                    value={editingOrder.payment_status}
-                    onValueChange={(value) =>
-                      setEditingOrder({ ...editingOrder, payment_status: value })
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Non Payé</SelectItem>
-                      <SelectItem value="paid">Payé</SelectItem>
-                      <SelectItem value="refunded">Remboursé</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <label className="text-sm font-medium">Statut de paiement</label>
+                <Select
+                  value={editingOrder.payment_status}
+                  onValueChange={(value) => setEditingOrder({ ...editingOrder, payment_status: value })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Non Payé</SelectItem>
+                    <SelectItem value="paid">Payé</SelectItem>
+                    <SelectItem value="refunded">Remboursé</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isUpdating}>
-                  Annuler
-                </Button>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isUpdating}>Annuler</Button>
                 <Button
-                  onClick={() =>
-                    updateOrderAndPaymentStatus(
-                      editingOrder.id,
-                      editingOrder.status,
-                      editingOrder.payment_status
-                    )
-                  }
+                  onClick={() => updateOrderAndPaymentStatus(editingOrder.id, editingOrder.status, editingOrder.payment_status)}
                   disabled={isUpdating}
                 >
-                  {isUpdating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Mise à jour...
-                    </>
-                  ) : (
-                    "Enregistrer"
-                  )}
+                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
                 </Button>
               </div>
             </div>

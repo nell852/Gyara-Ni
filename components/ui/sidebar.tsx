@@ -1,10 +1,8 @@
 'use client'
-
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, VariantProps } from 'class-variance-authority'
 import { PanelLeftIcon } from 'lucide-react'
-
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -49,7 +47,6 @@ function useSidebar() {
   if (!context) {
     throw new Error('useSidebar must be used within a SidebarProvider.')
   }
-
   return context
 }
 
@@ -81,7 +78,6 @@ function SidebarProvider({
       } else {
         _setOpen(openState)
       }
-
       // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
     },
@@ -104,7 +100,6 @@ function SidebarProvider({
         toggleSidebar()
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [toggleSidebar])
@@ -259,7 +254,6 @@ function SidebarTrigger({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { toggleSidebar } = useSidebar()
-
   return (
     <Button
       data-sidebar="trigger"
@@ -267,7 +261,7 @@ function SidebarTrigger({
       variant="ghost"
       size="icon"
       className={cn(
-        'p-2 md:hidden flex flex-col justify-center items-center space-y-1', // espace et alignement
+        'block md:hidden p-2 h-10 w-10 rounded-md', // Ensure visibility on mobile
         className
       )}
       onClick={(event) => {
@@ -276,20 +270,28 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      {/* Trois barres blanches */}
-      <span className="block w-6 h-1 bg-white rounded"></span>
-      <span className="block w-6 h-1 bg-white rounded"></span>
-      <span className="block w-6 h-1 bg-white rounded"></span>
-
+      {/* Hamburger icon with improved styling */}
+      <svg
+        className="w-6 h-6 text-white"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M4 6h16M4 12h16M4 18h16"
+        />
+      </svg>
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
 }
 
-
 function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
   const { toggleSidebar } = useSidebar()
-
   return (
     <button
       data-sidebar="rail"
@@ -407,7 +409,6 @@ function SidebarGroupLabel({
   ...props
 }: React.ComponentProps<'div'> & { asChild?: boolean }) {
   const Comp = asChild ? Slot : 'div'
-
   return (
     <Comp
       data-slot="sidebar-group-label"
@@ -428,7 +429,6 @@ function SidebarGroupAction({
   ...props
 }: React.ComponentProps<'button'> & { asChild?: boolean }) {
   const Comp = asChild ? Slot : 'button'
-
   return (
     <Comp
       data-slot="sidebar-group-action"
@@ -518,7 +518,6 @@ function SidebarMenuButton({
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot : 'button'
   const { isMobile, state } = useSidebar()
-
   const button = (
     <Comp
       data-slot="sidebar-menu-button"
@@ -563,7 +562,6 @@ function SidebarMenuAction({
   showOnHover?: boolean
 }) {
   const Comp = asChild ? Slot : 'button'
-
   return (
     <Comp
       data-slot="sidebar-menu-action"
@@ -686,7 +684,6 @@ function SidebarMenuSubButton({
   isActive?: boolean
 }) {
   const Comp = asChild ? Slot : 'a'
-
   return (
     <Comp
       data-slot="sidebar-menu-sub-button"

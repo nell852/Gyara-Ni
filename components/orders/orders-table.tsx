@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -23,6 +25,7 @@ interface Order {
   payment_method: string
   payment_status: string
   created_at: string
+  updated_at: string
   order_items: {
     id: string
     quantity: number
@@ -51,56 +54,38 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     const matchesSearch =
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
-
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
-
     return matchesSearch && matchesStatus
   })
 
-
-  // Fonction atomique UNIQUE pour mettre à jour statut commande et paiement
-  const updateOrderAndPaymentStatus = async (orderId: string, newOrderStatus: string, newPaymentStatus: string) => {
+  // --- mise à jour atomique inchangée ---
+  const updateOrderAndPaymentStatus = async (
+    orderId: string,
+    newOrderStatus: string,
+    newPaymentStatus: string
+  ) => {
     setIsUpdating(true)
-    
     try {
-      // Obtenir l'utilisateur connecté
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) {
-        throw new Error("Utilisateur non connecté")
-      }
+      if (userError || !user) throw new Error("Utilisateur non connecté")
 
-      // Utiliser la fonction RPC atomique pour TOUS les cas
       const { data: result, error: rpcError } = await supabase.rpc("update_order_status_atomic", {
         p_order_id: orderId,
-        p_order_status: newOrderStatus, 
+        p_order_status: newOrderStatus,
         p_payment_status: newPaymentStatus,
         p_user_id: user.id
       })
-      
-      if (rpcError) {
-        throw new Error(`Erreur RPC: ${rpcError.message}`)
-      }
-      
-      // Vérifier le résultat de la fonction atomique
-      if (!result?.success) {
-        throw new Error(result?.error || "Erreur lors de la mise à jour atomique")
-      }
+      if (rpcError) throw new Error(`Erreur RPC: ${rpcError.message}`)
+      if (!result?.success) throw new Error(result?.error || "Erreur lors de la mise à jour atomique")
 
-      // Succès: fermer le dialog et rafraîchir
       setIsDialogOpen(false)
       setEditingOrder(null)
       router.refresh()
-      
-      toast({
-        title: "Succès",
-        description: `Commande ${result.order_number} mise à jour avec succès.`,
-      })
-      
-    } catch (error) {
-      console.error("Erreur lors de la mise à jour:", error)
+      toast({ title: "Succès", description: `Commande ${result.order_number} mise à jour.` })
+    } catch (e) {
       toast({
         title: "Erreur",
-        description: error instanceof Error ? error.message : "Une erreur inattendue s'est produite",
+        description: e instanceof Error ? e.message : "Une erreur inattendue",
         variant: "destructive"
       })
     } finally {
@@ -113,100 +98,36 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     setIsDialogOpen(true)
   }
 
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(price)
+
+  const getItemsCount = (items: Order["order_items"]) =>
+    items.reduce((sum, item) => sum + item.quantity, 0)
+
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="h-4 w-4" />
-      case "confirmed":
-        return <CheckCircle className="h-4 w-4" />
-      case "preparing":
-        return <Clock className="h-4 w-4" />
-      case "ready":
-        return <CheckCircle className="h-4 w-4" />
-      case "delivered":
-        return <Truck className="h-4 w-4" />
-      case "cancelled":
-        return <XCircle className="h-4 w-4" />
-      default:
-        return <Clock className="h-4 w-4" />
+    const map: Record<string, JSX.Element> = {
+      pending: <Clock className="h-4 w-4" />,
+      confirmed: <CheckCircle className="h-4 w-4" />,
+      preparing: <Clock className="h-4 w-4" />,
+      ready: <CheckCircle className="h-4 w-4" />,
+      delivered: <Truck className="h-4 w-4" />,
+      cancelled: <XCircle className="h-4 w-4" />,
     }
+    return map[status] || <Clock className="h-4 w-4" />
   }
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "secondary" as const
-      case "confirmed":
-        return "default" as const
-      case "preparing":
-        return "secondary" as const
-      case "ready":
-        return "default" as const
-      case "delivered":
-        return "default" as const
-      case "cancelled":
-        return "destructive" as const
-      default:
-        return "outline" as const
-    }
-  }
+  const getStatusLabel = (s: string) =>
+    ({ pending: "En attente", confirmed: "Confirmée", preparing: "En préparation",
+       ready: "Prête", delivered: "Livrée", cancelled: "Annulée" }[s] || s)
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "En attente"
-      case "confirmed":
-        return "Confirmée"
-      case "preparing":
-        return "En préparation"
-      case "ready":
-        return "Prête"
-      case "delivered":
-        return "Livrée"
-      case "cancelled":
-        return "Annulée"
-      default:
-        return status
-    }
-  }
+  const getStatusVariant = (s: string) =>
+    ({ pending: "secondary", preparing: "secondary", cancelled: "destructive" }[s] || "default") as const
 
-  const getPaymentStatusVariant = (status: string) => {
-    switch (status) {
-      case "paid":
-        return "default" as const
-      case "pending":
-        return "secondary" as const
-      case "refunded":
-        return "destructive" as const
-      default:
-        return "outline" as const
-    }
-  }
+  const getPaymentStatusLabel = (s: string) =>
+    ({ paid: "Payé", pending: "Non Payé", refunded: "Remboursé" }[s] || s)
 
-  const getPaymentStatusLabel = (status: string) => {
-    switch (status) {
-      case "paid":
-        return "Payé"
-      case "pending":
-        return "Non Payé"
-      case "refunded":
-        return "Remboursé"
-      default:
-        return status
-    }
-  }
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "XOF",
-      minimumFractionDigits: 0,
-    }).format(price)
-  }
-
-  const getItemsCount = (items: Order["order_items"]) => {
-    return items.reduce((sum, item) => sum + item.quantity, 0)
-  }
+  const getPaymentStatusVariant = (s: string) =>
+    ({ paid: "default", pending: "secondary", refunded: "destructive" }[s] || "outline") as const
 
   return (
     <Card>
@@ -238,9 +159,10 @@ export function OrdersTable({ orders }: OrdersTableProps) {
           </Select>
         </div>
       </CardHeader>
+
       <CardContent>
         <div className="-mx-4 sm:mx-0 overflow-x-auto">
-          <Table className="min-w-[1000px] sm:min-w-0">
+          <Table className="min-w-[1100px] sm:min-w-0">
             <TableHeader>
               <TableRow>
                 <TableHead>Commande</TableHead>
@@ -249,91 +171,98 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                 <TableHead>Total</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead className="hidden lg:table-cell">Paiement</TableHead>
-                <TableHead className="hidden xl:table-cell">Date</TableHead>
+                <TableHead className="hidden xl:table-cell">Créée le</TableHead>
+                <TableHead className="hidden xl:table-cell">Mise à jour le</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
-          <TableBody>
-            {filteredOrders.map((order) => (
-              <TableRow key={order.id}>
-                <TableCell>
-                  <div>
-                    <div className="font-medium">{order.order_number}</div>
-                    <div className="text-sm text-muted-foreground sm:hidden">
-                      {order.customer_name || "Client anonyme"}
+
+            <TableBody>
+              {filteredOrders.map((order) => (
+                <TableRow key={order.id}>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{order.order_number}</div>
+                      <div className="text-sm text-muted-foreground sm:hidden">
+                        {order.customer_name || "Client anonyme"}
+                      </div>
+                      <div className="text-sm text-muted-foreground md:hidden">
+                        {getItemsCount(order.order_items)} article(s)
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground md:hidden">
-                      {getItemsCount(order.order_items)} article(s)
+                  </TableCell>
+
+                  <TableCell className="hidden sm:table-cell">
+                    <div>
+                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
                     </div>
-                    <div className="flex gap-2 mt-1 lg:hidden">
-                      <Badge variant={getStatusVariant(order.status)} className="text-xs">
-                        {getStatusLabel(order.status)}
-                      </Badge>
-                      <Badge variant={getPaymentStatusVariant(order.payment_status)} className="text-xs">
-                        {getPaymentStatusLabel(order.payment_status)}
-                      </Badge>
+                  </TableCell>
+
+                  <TableCell className="hidden md:table-cell">
+                    <div className="text-sm">
+                      <div>{getItemsCount(order.order_items)} article(s)</div>
+                      <div className="text-muted-foreground">
+                        {order.order_items.slice(0, 2).map((item) => (
+                          <div key={item.id}>
+                            {item.quantity}x {item.products?.name}
+                          </div>
+                        ))}
+                        {order.order_items.length > 2 && (
+                          <div>+{order.order_items.length - 2} autres...</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground xl:hidden mt-1">
-                      {new Date(order.created_at).toLocaleDateString("fr-FR")}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  <div>
-                    <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
-                    <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
-                  </div>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <div className="text-sm">
-                    <div>{getItemsCount(order.order_items)} article(s)</div>
-                    <div className="text-muted-foreground">
-                      {order.order_items.slice(0, 2).map((item, index) => (
-                        <div key={item.id}>
-                          {item.quantity}x {item.products?.name}
-                        </div>
-                      ))}
-                      {order.order_items.length > 2 && <div>+{order.order_items.length - 2} autres...</div>}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="font-medium">{formatPrice(order.total_amount)}</div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1 w-fit">
-                    {getStatusIcon(order.status)}
-                    {getStatusLabel(order.status)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  <Badge variant={getPaymentStatusVariant(order.payment_status)}>
-                    {getPaymentStatusLabel(order.payment_status)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="hidden xl:table-cell">{new Date(order.created_at).toLocaleDateString("fr-FR")}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditOrder(order)}
-                    className="text-primary hover:text-primary/80"
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Modifier
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="font-medium">{formatPrice(order.total_amount)}</div>
+                  </TableCell>
+
+                  <TableCell>
+                    <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1 w-fit">
+                      {getStatusIcon(order.status)}
+                      {getStatusLabel(order.status)}
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell className="hidden lg:table-cell">
+                    <Badge variant={getPaymentStatusVariant(order.payment_status)}>
+                      {getPaymentStatusLabel(order.payment_status)}
+                    </Badge>
+                  </TableCell>
+
+                  <TableCell className="hidden xl:table-cell">
+                    {new Date(order.created_at).toLocaleString("fr-FR")}
+                  </TableCell>
+
+                  <TableCell className="hidden xl:table-cell">
+                    {new Date(order.updated_at).toLocaleString("fr-FR")}
+                  </TableCell>
+
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditOrder(order)}
+                      className="text-primary hover:text-primary/80"
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Modifier
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
 
         {filteredOrders.length === 0 && (
           <div className="text-center py-8 text-muted-foreground">Aucune commande trouvée</div>
         )}
       </CardContent>
-      
+
+      {/* Dialog d’édition inchangé */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -350,8 +279,9 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                   Total: {formatPrice(editingOrder.total_amount)}
                 </p>
               </div>
-              
+
               <div className="space-y-3">
+                {/* Sélecteurs statut & paiement */}
                 <div>
                   <label className="text-sm font-medium">Statut de la commande</label>
                   <Select
@@ -360,9 +290,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       setEditingOrder({ ...editingOrder, status: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">En attente</SelectItem>
                       <SelectItem value="confirmed">Confirmée</SelectItem>
@@ -373,7 +301,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div>
                   <label className="text-sm font-medium">Statut de paiement</label>
                   <Select
@@ -382,9 +310,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       setEditingOrder({ ...editingOrder, payment_status: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Non Payé</SelectItem>
                       <SelectItem value="paid">Payé</SelectItem>
@@ -393,23 +319,19 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                   </Select>
                 </div>
               </div>
-              
+
               <div className="flex justify-end space-x-2 pt-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                  disabled={isUpdating}
-                >
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isUpdating}>
                   Annuler
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={() =>
                     updateOrderAndPaymentStatus(
-                      editingOrder.id, 
-                      editingOrder.status, 
+                      editingOrder.id,
+                      editingOrder.status,
                       editingOrder.payment_status
                     )
-                  }}
+                  }
                   disabled={isUpdating}
                 >
                   {isUpdating ? (

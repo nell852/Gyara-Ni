@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2, Trash } from "lucide-react"
+import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -33,7 +33,7 @@ interface Order {
     total_price: number
     products: { name: string } | null
   }[]
-  profiles: { role: string, full_name: string } | null
+  profiles: { full_name: string, role: string } | null
 }
 
 interface OrdersTableProps {
@@ -46,9 +46,21 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [currentUserRole, setCurrentUserRole] = useState<string>("") // role utilisateur
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
+
+  // Récupération du rôle actuel
+  useState(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
+          if (data) setCurrentUserRole(data.role)
+        })
+      }
+    })
+  })
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -58,12 +70,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     return matchesSearch && matchesStatus
   })
 
-  // --- mise à jour atomique inchangée ---
-  const updateOrderAndPaymentStatus = async (
-    orderId: string,
-    newOrderStatus: string,
-    newPaymentStatus: string
-  ) => {
+  const updateOrderAndPaymentStatus = async (orderId: string, newOrderStatus: string, newPaymentStatus: string) => {
     setIsUpdating(true)
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -93,16 +100,22 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     }
   }
 
-  // --- supprimer commande ---
-  const deleteOrder = async (orderId: string) => {
+  const handleDeleteOrder = async (orderId: string) => {
     if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return
+    setIsUpdating(true)
     try {
       const { error } = await supabase.from("orders").delete().eq("id", orderId)
       if (error) throw new Error(error.message)
-      toast({ title: "Commande supprimée", variant: "destructive" })
+      toast({ title: "Succès", description: "Commande supprimée." })
       router.refresh()
     } catch (e) {
-      toast({ title: "Erreur", description: e instanceof Error ? e.message : "Erreur inattendue", variant: "destructive" })
+      toast({
+        title: "Erreur",
+        description: e instanceof Error ? e.message : "Une erreur inattendue",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -175,17 +188,18 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
       <CardContent>
         <div className="-mx-4 sm:mx-0 overflow-x-auto">
-          <Table className="min-w-[1100px] sm:min-w-0">
+          <Table className="min-w-[1200px] sm:min-w-0">
             <TableHeader>
               <TableRow>
                 <TableHead>Commande</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Articles</TableHead>
+                <TableHead className="hidden sm:table-cell">Client</TableHead>
+                <TableHead className="hidden md:table-cell">Vendeur</TableHead>
+                <TableHead className="hidden md:table-cell">Articles</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead>Paiement</TableHead>
-                <TableHead>Créée le</TableHead>
-                <TableHead>Mise à jour le</TableHead>
+                <TableHead className="hidden lg:table-cell">Paiement</TableHead>
+                <TableHead className="hidden xl:table-cell">Créée le</TableHead>
+                <TableHead className="hidden xl:table-cell">Mise à jour le</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -194,22 +208,30 @@ export function OrdersTable({ orders }: OrdersTableProps) {
               {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell>
-                    <div className="font-medium">{order.order_number}</div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
-                    <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="text-sm">
-                      {getItemsCount(order.order_items)} article(s)
-                      <div className="text-muted-foreground">
-                        {order.order_items.map(item => (
-                          <div key={item.id}>{item.quantity}x {item.products?.name}</div>
-                        ))}
+                    <div>
+                      <div className="font-medium">{order.order_number}</div>
+                      <div className="text-sm text-muted-foreground sm:hidden">
+                        {order.customer_name || "Client anonyme"}
                       </div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden sm:table-cell">
+                    <div>
+                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
+                    </div>
+                  </TableCell>
+
+                  <TableCell className="hidden md:table-cell">
+                    {order.profiles?.full_name || "Non attribué"}
+                  </TableCell>
+
+                  <TableCell className="hidden md:table-cell">
+                    <div className="text-sm">
+                      {order.order_items.map((item) => (
+                        <div key={item.id}>{item.quantity} x {item.products?.name}</div>
+                      ))}
                     </div>
                   </TableCell>
 
@@ -217,27 +239,32 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
                   <TableCell>
                     <Badge variant={getStatusVariant(order.status)} className="flex items-center gap-1 w-fit">
-                      {getStatusIcon(order.status)} {getStatusLabel(order.status)}
+                      {getStatusIcon(order.status)}
+                      {getStatusLabel(order.status)}
                     </Badge>
                   </TableCell>
 
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     <Badge variant={getPaymentStatusVariant(order.payment_status)}>
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
 
-                  <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
-                  <TableCell>{new Date(order.updated_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell className="hidden xl:table-cell">
+                    {new Date(order.created_at).toLocaleString("fr-FR")}
+                  </TableCell>
+
+                  <TableCell className="hidden xl:table-cell">
+                    {new Date(order.updated_at).toLocaleString("fr-FR")}
+                  </TableCell>
 
                   <TableCell className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
                       <Edit className="h-4 w-4" />
                     </Button>
-
-                    {order.profiles?.role === "admin" && (
-                      <Button variant="destructive" size="sm" onClick={() => deleteOrder(order.id)}>
-                        <Trash className="h-4 w-4" />
+                    {currentUserRole === "admin" && (
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteOrder(order.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     )}
                   </TableCell>
@@ -252,56 +279,88 @@ export function OrdersTable({ orders }: OrdersTableProps) {
         )}
       </CardContent>
 
-      {/* Dialog inchangé */}
+      {/* Dialog d’édition */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader><DialogTitle>Modifier la commande</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Modifier la commande</DialogTitle>
+          </DialogHeader>
           {editingOrder && (
             <div className="space-y-4">
-              <p>Commande: {editingOrder.order_number}</p>
-              <p>Client: {editingOrder.customer_name || "Client anonyme"}</p>
-              <p>Total: {formatPrice(editingOrder.total_amount)}</p>
-
               <div>
-                <label className="text-sm font-medium">Statut de la commande</label>
-                <Select
-                  value={editingOrder.status}
-                  onValueChange={(value) => setEditingOrder({ ...editingOrder, status: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">En attente</SelectItem>
-                    <SelectItem value="confirmed">Confirmée</SelectItem>
-                    <SelectItem value="preparing">En préparation</SelectItem>
-                    <SelectItem value="ready">Prête</SelectItem>
-                    <SelectItem value="delivered">Livrée</SelectItem>
-                    <SelectItem value="cancelled">Annulée</SelectItem>
-                  </SelectContent>
-                </Select>
+                <h4 className="font-medium mb-2">Commande: {editingOrder.order_number}</h4>
+                <p className="text-sm text-muted-foreground">
+                  Client: {editingOrder.customer_name || "Client anonyme"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Vendeur: {editingOrder.profiles?.full_name || "Non attribué"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Total: {formatPrice(editingOrder.total_amount)}
+                </p>
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Statut de paiement</label>
-                <Select
-                  value={editingOrder.payment_status}
-                  onValueChange={(value) => setEditingOrder({ ...editingOrder, payment_status: value })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Non Payé</SelectItem>
-                    <SelectItem value="paid">Payé</SelectItem>
-                    <SelectItem value="refunded">Remboursé</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Statut de la commande</label>
+                  <Select
+                    value={editingOrder.status}
+                    onValueChange={(value) =>
+                      setEditingOrder({ ...editingOrder, status: value })
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">En attente</SelectItem>
+                      <SelectItem value="confirmed">Confirmée</SelectItem>
+                      <SelectItem value="preparing">En préparation</SelectItem>
+                      <SelectItem value="ready">Prête</SelectItem>
+                      <SelectItem value="delivered">Livrée</SelectItem>
+                      <SelectItem value="cancelled">Annulée</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Statut de paiement</label>
+                  <Select
+                    value={editingOrder.payment_status}
+                    onValueChange={(value) =>
+                      setEditingOrder({ ...editingOrder, payment_status: value })
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Non Payé</SelectItem>
+                      <SelectItem value="paid">Payé</SelectItem>
+                      <SelectItem value="refunded">Remboursé</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isUpdating}>Annuler</Button>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isUpdating}>
+                  Annuler
+                </Button>
                 <Button
-                  onClick={() => updateOrderAndPaymentStatus(editingOrder.id, editingOrder.status, editingOrder.payment_status)}
+                  onClick={() =>
+                    updateOrderAndPaymentStatus(
+                      editingOrder.id,
+                      editingOrder.status,
+                      editingOrder.payment_status
+                    )
+                  }
                   disabled={isUpdating}
                 >
-                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enregistrer"}
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Mise à jour...
+                    </>
+                  ) : (
+                    "Enregistrer"
+                  )}
                 </Button>
               </div>
             </div>

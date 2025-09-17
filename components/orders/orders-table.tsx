@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2, Trash2 } from "lucide-react"
+import { Search, Edit, Clock, CheckCircle, XCircle, Truck, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
@@ -25,7 +25,6 @@ interface Order {
   payment_method: string
   payment_status: string
   created_at: string
-  updated_at: string
   order_items: {
     id: string
     quantity: number
@@ -46,27 +45,10 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
-  const [userRole, setUserRole] = useState<string | null>(null)
 
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
-
-  // Récupérer le rôle de l'utilisateur connecté
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      if (!error && user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single()
-        setUserRole(profile?.role || null)
-      }
-    }
-    fetchUserRole()
-  }, [])
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -110,25 +92,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     }
   }
 
-  const deleteOrder = async (orderId: string) => {
-    if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return
-    setIsUpdating(true)
-    try {
-      const { error } = await supabase.from("orders").delete().eq("id", orderId)
-      if (error) throw error
-      router.refresh()
-      toast({ title: "Succès", description: "Commande supprimée." })
-    } catch (e) {
-      toast({
-        title: "Erreur",
-        description: e instanceof Error ? e.message : "Erreur lors de la suppression",
-        variant: "destructive"
-      })
-    } finally {
-      setIsUpdating(false)
-    }
-  }
-
   const handleEditOrder = (order: Order) => {
     setEditingOrder(order)
     setIsDialogOpen(true)
@@ -136,9 +99,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(price)
-
-  const getItemsCount = (items: Order["order_items"]) =>
-    items.reduce((sum, item) => sum + item.quantity, 0)
 
   const getStatusIcon = (status: string) => {
     const map: Record<string, JSX.Element> = {
@@ -210,7 +170,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                 <TableHead>Statut</TableHead>
                 <TableHead>Paiement</TableHead>
                 <TableHead>Créée le</TableHead>
-                <TableHead>Mise à jour le</TableHead>
                 <TableHead>Vendeur</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -244,17 +203,11 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                     </Badge>
                   </TableCell>
                   <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
-                  <TableCell>{new Date(order.updated_at).toLocaleString("fr-FR")}</TableCell>
                   <TableCell>{order.profiles?.full_name || "Vendeur inconnu"}</TableCell>
-                  <TableCell className="flex flex-col gap-1">
+                  <TableCell>
                     <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
                       <Edit className="h-4 w-4" /> Modifier
                     </Button>
-                    {userRole === "admin" && (
-                      <Button variant="destructive" size="sm" onClick={() => deleteOrder(order.id)}>
-                        <Trash2 className="h-4 w-4" /> Supprimer
-                      </Button>
-                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -339,13 +292,8 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                   disabled={isUpdating}
                 >
                   {isUpdating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Mise à jour...
-                    </>
-                  ) : (
-                    "Enregistrer"
-                  )}
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Mise à jour...</>
+                  ) : "Enregistrer"}
                 </Button>
               </div>
             </div>
@@ -355,3 +303,4 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     </Card>
   )
 }
+

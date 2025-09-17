@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useContext, createContext } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 interface Notification {
@@ -12,13 +12,24 @@ interface Notification {
   action_url?: string
 }
 
-export function useNotifications() {
+interface NotificationsContextType {
+  notifications: Notification[]
+  unreadCount: number
+  loading: boolean
+  markAsRead: (id: string) => Promise<void>
+  markAllAsRead: () => Promise<void>
+  deleteNotification: (id: string) => Promise<void>
+  refetch: () => Promise<void>
+}
+
+const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined)
+
+export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  // Fonction pour récupérer les notifications
   const fetchNotifications = async () => {
     try {
       setLoading(true)
@@ -29,12 +40,16 @@ export function useNotifications() {
         .limit(50)
 
       if (error) {
+        console.error("Erreur Supabase lors de la récupération des notifications :", error)
         throw error
       }
 
       if (data) {
+        console.log("Notifications récupérées :", data)
         setNotifications(data)
-        setUnreadCount(data.filter((n) => !n.is_read).length)
+        const count = data.filter((n) => !n.is_read).length
+        setUnreadCount(count)
+        console.log("Nombre de notifications non lues :", count)
       } else {
         setNotifications([])
         setUnreadCount(0)
@@ -46,23 +61,22 @@ export function useNotifications() {
     }
   }
 
-  // Marquer une notification comme lue
   const markAsRead = async (id: string) => {
     try {
+      console.log(`Tentative de marquage comme lu pour la notification ID: ${id}`)
       const { error } = await supabase
         .from("notifications")
         .update({ is_read: true })
         .eq("id", id)
 
       if (error) {
+        console.error("Erreur Supabase lors du marquage comme lu :", error)
         throw error
       }
 
-      // Mise à jour locale de l'état
+      console.log(`Notification ${id} marquée comme lue dans la base de données`)
       setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === id ? { ...n, is_read: true } : n
-        )
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
       setUnreadCount((prev) => Math.max(0, prev - 1))
     } catch (error) {
@@ -71,22 +85,21 @@ export function useNotifications() {
     }
   }
 
-  // Marquer toutes les notifications comme lues
   const markAllAsRead = async () => {
     try {
+      console.log("Tentative de marquage de toutes les notifications comme lues")
       const { error } = await supabase
         .from("notifications")
         .update({ is_read: true })
         .eq("is_read", false)
 
       if (error) {
+        console.error("Erreur Supabase lors du marquage de toutes les notifications comme lues :", error)
         throw error
       }
 
-      // Mise à jour locale de l'état
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, is_read: true }))
-      )
+      console.log("Toutes les notifications marquées comme lues dans la base de données")
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch (error) {
       console.error("Erreur lors du marquage de toutes les notifications comme lues :", error)
@@ -94,22 +107,21 @@ export function useNotifications() {
     }
   }
 
-  // Supprimer une notification
   const deleteNotification = async (id: string) => {
     try {
+      console.log(`Tentative de suppression de la notification ID: ${id}`)
       const { error } = await supabase
         .from("notifications")
         .delete()
         .eq("id", id)
 
       if (error) {
+        console.error("Erreur Supabase lors de la suppression de la notification :", error)
         throw error
       }
 
-      // Mise à jour locale de l'état
-      setNotifications((prev) =>
-        prev.filter((n) => n.id !== id)
-      )
+      console.log(`Notification ${id} supprimée de la base de données`)
+      setNotifications((prev) => prev.filter((n) => n.id !== id))
       setUnreadCount((prev) =>
         Math.max(0, prev - (notifications.find((n) => n.id === id && !n.is_read) ? 1 : 0))
       )
@@ -119,24 +131,44 @@ export function useNotifications() {
     }
   }
 
-  // Initialisation et abonnement en temps réel
   useEffect(() => {
     fetchNotifications()
 
-    // Abonnement aux changements en temps réel
     const channel = supabase
       .channel("notifications")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-        },
+        { event: "INSERT", schema: "public", table: "notifications" },
         (payload) => {
-          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE" || payload.eventType === "DELETE") {
-            fetchNotifications()
+          console.log("Nouvelle notification reçue :", payload)
+          setNotifications((prev) => [payload.new as Notification, ...prev])
+          if (!(payload.new as Notification).is_read) {
+            setUnreadCount((prev) => prev + 1)
           }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications" },
+        (payload) => {
+          console.log("Mise à jour de notification reçue :", payload)
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === payload.new.id ? { ...n, ...payload.new } : n))
+          )
+          setUnreadCount((prev) =>
+            Math.max(0, prev + ((payload.new as Notification).is_read && !(payload.old as Notification).is_read ? -1 : 0))
+          )
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "notifications" },
+        (payload) => {
+          console.log("Suppression de notification reçue :", payload)
+          setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id))
+          setUnreadCount((prev) =>
+            Math.max(0, prev - (!(payload.old as Notification).is_read ? 1 : 0))
+          )
         }
       )
       .subscribe()
@@ -146,13 +178,27 @@ export function useNotifications() {
     }
   }, [])
 
-  return {
-    notifications,
-    unreadCount,
-    loading,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    refetch: fetchNotifications,
+  return (
+    <NotificationsContext.Provider
+      value={{
+        notifications,
+        unreadCount,
+        loading,
+        markAsRead,
+        markAllAsRead,
+        deleteNotification,
+        refetch: fetchNotifications,
+      }}
+    >
+      {children}
+    </NotificationsContext.Provider>
+  )
+}
+
+export function useNotifications() {
+  const context = useContext(NotificationsContext)
+  if (!context) {
+    throw new Error("useNotifications must be used within a NotificationsProvider")
   }
+  return context
 }

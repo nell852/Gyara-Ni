@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 async function OrdersContent() {
   const supabase = await createClient()
 
-  // Get orders with items
+  // Sélectionne toutes les colonnes, y compris created_at et updated_at
   const { data: orders } = await supabase
     .from("orders")
     .select(`
@@ -32,9 +32,8 @@ async function OrdersContent() {
 
 async function OrdersStats() {
   const supabase = await createClient()
-
-  // Get today's stats
   const today = new Date().toISOString().split("T")[0]
+
   const [{ count: todayOrders }, { data: todayRevenue }, { count: pendingOrders }, { count: readyOrders }] =
     await Promise.all([
       supabase

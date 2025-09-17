@@ -266,18 +266,26 @@ function SidebarTrigger({
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon"
-      className={cn('size-7', className)}
+      className={cn(
+        'p-2 md:hidden flex flex-col justify-center items-center space-y-1', // espace et alignement
+        className
+      )}
       onClick={(event) => {
         onClick?.(event)
         toggleSidebar()
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      {/* Trois barres blanches */}
+      <span className="block w-6 h-1 bg-white rounded"></span>
+      <span className="block w-6 h-1 bg-white rounded"></span>
+      <span className="block w-6 h-1 bg-white rounded"></span>
+
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
 }
+
 
 function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
   const { toggleSidebar } = useSidebar()

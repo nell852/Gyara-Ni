@@ -33,7 +33,7 @@ interface Order {
     total_price: number
     products: { name: string } | null
   }[]
-  profiles: { full_name: string, role: string } | null
+  profiles: { full_name: string; role: string } | null
 }
 
 interface OrdersTableProps {
@@ -46,21 +46,9 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
-  const [currentUserRole, setCurrentUserRole] = useState<string>("") // role utilisateur
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
-
-  // Récupération du rôle actuel
-  useState(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from("profiles").select("role").eq("id", user.id).single().then(({ data }) => {
-          if (data) setCurrentUserRole(data.role)
-        })
-      }
-    })
-  })
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
@@ -70,6 +58,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     return matchesSearch && matchesStatus
   })
 
+  // --- Mise à jour atomique ---
   const updateOrderAndPaymentStatus = async (orderId: string, newOrderStatus: string, newPaymentStatus: string) => {
     setIsUpdating(true)
     try {
@@ -100,23 +89,28 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     }
   }
 
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return
-    setIsUpdating(true)
-    try {
-      const { error } = await supabase.from("orders").delete().eq("id", orderId)
-      if (error) throw new Error(error.message)
-      toast({ title: "Succès", description: "Commande supprimée." })
-      router.refresh()
-    } catch (e) {
-      toast({
-        title: "Erreur",
-        description: e instanceof Error ? e.message : "Une erreur inattendue",
-        variant: "destructive"
-      })
-    } finally {
-      setIsUpdating(false)
+  const deleteOrder = async (orderId: string) => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      toast({ title: "Erreur", description: "Utilisateur non connecté", variant: "destructive" })
+      return
     }
+
+    if (user.role !== "admin") {
+      toast({ title: "Erreur", description: "Seuls les admins peuvent supprimer une commande", variant: "destructive" })
+      return
+    }
+
+    if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return
+
+    const { error } = await supabase.from("orders").delete().eq("id", orderId)
+    if (error) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" })
+      return
+    }
+
+    toast({ title: "Succès", description: "Commande supprimée" })
+    router.refresh()
   }
 
   const handleEditOrder = (order: Order) => {
@@ -188,18 +182,18 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
       <CardContent>
         <div className="-mx-4 sm:mx-0 overflow-x-auto">
-          <Table className="min-w-[1200px] sm:min-w-0">
+          <Table className="min-w-[1100px] sm:min-w-0">
             <TableHeader>
               <TableRow>
                 <TableHead>Commande</TableHead>
-                <TableHead className="hidden sm:table-cell">Client</TableHead>
-                <TableHead className="hidden md:table-cell">Vendeur</TableHead>
-                <TableHead className="hidden md:table-cell">Articles</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Vendeur</TableHead>
+                <TableHead>Articles</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead className="hidden lg:table-cell">Paiement</TableHead>
-                <TableHead className="hidden xl:table-cell">Créée le</TableHead>
-                <TableHead className="hidden xl:table-cell">Mise à jour le</TableHead>
+                <TableHead>Paiement</TableHead>
+                <TableHead>Créée le</TableHead>
+                <TableHead>Mise à jour le</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -208,31 +202,24 @@ export function OrdersTable({ orders }: OrdersTableProps) {
               {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell>
-                    <div>
-                      <div className="font-medium">{order.order_number}</div>
-                      <div className="text-sm text-muted-foreground sm:hidden">
-                        {order.customer_name || "Client anonyme"}
+                    <div className="font-medium">{order.order_number}</div>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
+                    <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
+                  </TableCell>
+
+                  <TableCell>
+                    <div className="font-medium">{order.profiles?.full_name || "Vendeur inconnu"}</div>
+                  </TableCell>
+
+                  <TableCell>
+                    {order.order_items.map((item) => (
+                      <div key={item.id}>
+                        {item.quantity}x {item.products?.name}
                       </div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="hidden sm:table-cell">
-                    <div>
-                      <div className="font-medium">{order.customer_name || "Client anonyme"}</div>
-                      <div className="text-sm text-muted-foreground">{order.customer_phone}</div>
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="hidden md:table-cell">
-                    {order.profiles?.full_name || "Non attribué"}
-                  </TableCell>
-
-                  <TableCell className="hidden md:table-cell">
-                    <div className="text-sm">
-                      {order.order_items.map((item) => (
-                        <div key={item.id}>{item.quantity} x {item.products?.name}</div>
-                      ))}
-                    </div>
+                    ))}
                   </TableCell>
 
                   <TableCell>{formatPrice(order.total_amount)}</TableCell>
@@ -244,27 +231,32 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                     </Badge>
                   </TableCell>
 
-                  <TableCell className="hidden lg:table-cell">
+                  <TableCell>
                     <Badge variant={getPaymentStatusVariant(order.payment_status)}>
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
 
-                  <TableCell className="hidden xl:table-cell">
-                    {new Date(order.created_at).toLocaleString("fr-FR")}
-                  </TableCell>
-
-                  <TableCell className="hidden xl:table-cell">
-                    {new Date(order.updated_at).toLocaleString("fr-FR")}
-                  </TableCell>
+                  <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell>{new Date(order.updated_at).toLocaleString("fr-FR")}</TableCell>
 
                   <TableCell className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
-                      <Edit className="h-4 w-4" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditOrder(order)}
+                      className="text-primary hover:text-primary/80"
+                    >
+                      <Edit className="mr-2 h-4 w-4" /> Modifier
                     </Button>
-                    {currentUserRole === "admin" && (
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteOrder(order.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                    {order.profiles?.role === "admin" && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteOrder(order.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Trash2 className="h-4 w-4" /> Supprimer
                       </Button>
                     )}
                   </TableCell>
@@ -279,7 +271,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
         )}
       </CardContent>
 
-      {/* Dialog d’édition */}
+      {/* Dialog pour modifier */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -291,9 +283,6 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                 <h4 className="font-medium mb-2">Commande: {editingOrder.order_number}</h4>
                 <p className="text-sm text-muted-foreground">
                   Client: {editingOrder.customer_name || "Client anonyme"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Vendeur: {editingOrder.profiles?.full_name || "Non attribué"}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Total: {formatPrice(editingOrder.total_amount)}

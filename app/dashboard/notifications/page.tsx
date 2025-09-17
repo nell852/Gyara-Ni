@@ -1,5 +1,4 @@
 "use client"
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,7 +9,7 @@ import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 
 export default function NotificationsPage() {
-  const { notifications, loading, markAsRead } = useNotifications()
+  const { notifications, loading, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -42,6 +41,14 @@ export default function NotificationsPage() {
     }
   }
 
+  // Fonction pour supprimer toutes les notifications lues
+  const deleteAllRead = async () => {
+    const readNotificationIds = notifications.filter((n) => n.is_read).map((n) => n.id)
+    for (const id of readNotificationIds) {
+      await deleteNotification(id)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -49,9 +56,12 @@ export default function NotificationsPage() {
           <h2 className="text-3xl font-bold text-foreground">Notifications</h2>
           <p className="text-muted-foreground">Gérez vos alertes et notifications</p>
         </div>
-        <NotificationActions />
+        <NotificationActions
+          unreadCount={unreadCount}
+          markAllAsRead={markAllAsRead}
+          deleteAllRead={deleteAllRead}
+        />
       </div>
-
       <div className="grid gap-4">
         {loading ? (
           <Card>

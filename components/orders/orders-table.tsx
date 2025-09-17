@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table"
@@ -50,6 +50,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
   const supabase = createClient()
   const { toast } = useToast()
 
+  // Filtrage des commandes
   const filteredOrders = orders.filter((order) => {
     const matchesSearch =
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -58,6 +59,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     return matchesSearch && matchesStatus
   })
 
+  // Mise à jour des statuts
   const updateOrderAndPaymentStatus = async (
     orderId: string,
     newOrderStatus: string,
@@ -99,6 +101,20 @@ export function OrdersTable({ orders }: OrdersTableProps) {
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(price)
+
+  // --- Nouveau format pour heure fixe Cameroun ---
+  const formatCameroonTime = (isoDate: string) => {
+    return new Intl.DateTimeFormat("fr-FR", {
+      timeZone: "Africa/Douala",
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(isoDate))
+  }
 
   const getStatusIcon = (status: string) => {
     const map: Record<string, JSX.Element> = {
@@ -202,7 +218,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                       {getPaymentStatusLabel(order.payment_status)}
                     </Badge>
                   </TableCell>
-                  <TableCell>{new Date(order.created_at).toLocaleString("fr-FR")}</TableCell>
+                  <TableCell>{formatCameroonTime(order.created_at)}</TableCell>
                   <TableCell>{order.profiles?.full_name || "Vendeur inconnu"}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm" onClick={() => handleEditOrder(order)}>
@@ -303,4 +319,3 @@ export function OrdersTable({ orders }: OrdersTableProps) {
     </Card>
   )
 }
-

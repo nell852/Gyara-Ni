@@ -1,5 +1,4 @@
 "use client"
-
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -19,56 +18,112 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
+  // Fonction pour récupérer les notifications
   const fetchNotifications = async () => {
     try {
-      const { data } = await supabase
+      setLoading(true)
+      const { data, error } = await supabase
         .from("notifications")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(50)
 
+      if (error) {
+        throw error
+      }
+
       if (data) {
         setNotifications(data)
         setUnreadCount(data.filter((n) => !n.is_read).length)
+      } else {
+        setNotifications([])
+        setUnreadCount(0)
       }
     } catch (error) {
-      console.error("Error fetching notifications:", error)
+      console.error("Erreur lors de la récupération des notifications :", error)
     } finally {
       setLoading(false)
     }
   }
 
+  // Marquer une notification comme lue
   const markAsRead = async (id: string) => {
     try {
-      await supabase.from("notifications").update({ is_read: true }).eq("id", id)
-      await fetchNotifications()
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      // Mise à jour locale de l'état
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === id ? { ...n, is_read: true } : n
+        )
+      )
+      setUnreadCount((prev) => Math.max(0, prev - 1))
     } catch (error) {
-      console.error("Error marking notification as read:", error)
+      console.error("Erreur lors du marquage comme lu :", error)
+      await fetchNotifications()
     }
   }
 
+  // Marquer toutes les notifications comme lues
   const markAllAsRead = async () => {
     try {
-      await supabase.from("notifications").update({ is_read: true }).eq("is_read", false)
-      await fetchNotifications()
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("is_read", false)
+
+      if (error) {
+        throw error
+      }
+
+      // Mise à jour locale de l'état
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, is_read: true }))
+      )
+      setUnreadCount(0)
     } catch (error) {
-      console.error("Error marking all notifications as read:", error)
+      console.error("Erreur lors du marquage de toutes les notifications comme lues :", error)
+      await fetchNotifications()
     }
   }
 
+  // Supprimer une notification
   const deleteNotification = async (id: string) => {
     try {
-      await supabase.from("notifications").delete().eq("id", id)
-      await fetchNotifications()
+      const { error } = await supabase
+        .from("notifications")
+        .delete()
+        .eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      // Mise à jour locale de l'état
+      setNotifications((prev) =>
+        prev.filter((n) => n.id !== id)
+      )
+      setUnreadCount((prev) =>
+        Math.max(0, prev - (notifications.find((n) => n.id === id && !n.is_read) ? 1 : 0))
+      )
     } catch (error) {
-      console.error("Error deleting notification:", error)
+      console.error("Erreur lors de la suppression de la notification :", error)
+      await fetchNotifications()
     }
   }
 
+  // Initialisation et abonnement en temps réel
   useEffect(() => {
     fetchNotifications()
 
-    // Subscribe to real-time notifications
+    // Abonnement aux changements en temps réel
     const channel = supabase
       .channel("notifications")
       .on(
@@ -78,9 +133,11 @@ export function useNotifications() {
           schema: "public",
           table: "notifications",
         },
-        () => {
-          fetchNotifications()
-        },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE" || payload.eventType === "DELETE") {
+            fetchNotifications()
+          }
+        }
       )
       .subscribe()
 

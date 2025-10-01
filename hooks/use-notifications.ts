@@ -30,7 +30,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
-  // Validation d'UUID
   const isValidUUID = (id: string) => {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     return uuidRegex.test(id)
@@ -45,17 +44,11 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         .order("created_at", { ascending: false })
         .limit(50)
 
-      if (error) {
-        console.error("Erreur Supabase lors de la récupération des notifications :", error)
-        throw error
-      }
+      if (error) throw error
 
       if (data) {
-        console.log("Notifications récupérées :", data)
         setNotifications(data)
-        const count = data.filter((n) => !n.is_read).length
-        setUnreadCount(count)
-        console.log("Nombre de notifications non lues :", count)
+        setUnreadCount(data.filter((n) => !n.is_read).length)
       } else {
         setNotifications([])
         setUnreadCount(0)
@@ -69,94 +62,51 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
   const markAsRead = async (id: string) => {
     try {
-      if (!isValidUUID(id)) {
-        console.error(`ID invalide pour markAsRead: ${id}`)
-        throw new Error("L'ID fourni n'est pas un UUID valide")
-      }
-      console.log(`Tentative de marquage comme lu pour la notification ID: ${id}`)
-      const { data, error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", id)
-        .select()
-
-      if (error) {
-        console.error("Erreur Supabase lors du marquage comme lu :", error)
-        throw error
-      }
-
-      console.log("Notification mise à jour :", data)
+      if (!isValidUUID(id)) throw new Error("ID invalide")
+      await supabase.from("notifications").update({ is_read: true }).eq("id", id)
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       )
       setUnreadCount((prev) => Math.max(0, prev - 1))
     } catch (error) {
-      console.error("Erreur lors du marquage comme lu :", error)
+      console.error(error)
       await fetchNotifications()
     }
   }
 
   const markAllAsRead = async () => {
     try {
-      console.log("Tentative de marquage de toutes les notifications comme lues")
-      const { data, error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("is_read", false)
-        .select()
-
-      if (error) {
-        console.error("Erreur Supabase lors du marquage de toutes les notifications comme lues :", error)
-        throw error
-      }
-
-      console.log("Notifications marquées comme lues :", data)
+      await supabase.from("notifications").update({ is_read: true }).eq("is_read", false)
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch (error) {
-      console.error("Erreur lors du marquage de toutes les notifications comme lues :", error)
+      console.error(error)
       await fetchNotifications()
     }
   }
 
   const deleteNotification = async (id: string) => {
     try {
-      if (!isValidUUID(id)) {
-        console.error(`ID invalide pour deleteNotification: ${id}`)
-        throw new Error("L'ID fourni n'est pas un UUID valide")
-      }
-      console.log(`Tentative de suppression de la notification ID: ${id}`)
-      const { error } = await supabase
-        .from("notifications")
-        .delete()
-        .eq("id", id)
-
-      if (error) {
-        console.error("Erreur Supabase lors de la suppression de la notification :", error)
-        throw error
-      }
-
-      console.log(`Notification ${id} supprimée de la base de données`)
+      if (!isValidUUID(id)) throw new Error("ID invalide")
+      await supabase.from("notifications").delete().eq("id", id)
       setNotifications((prev) => prev.filter((n) => n.id !== id))
       setUnreadCount((prev) =>
         Math.max(0, prev - (notifications.find((n) => n.id === id && !n.is_read) ? 1 : 0))
       )
     } catch (error) {
-      console.error("Erreur lors de la suppression de la notification :", error)
+      console.error(error)
       await fetchNotifications()
     }
   }
 
   useEffect(() => {
     fetchNotifications()
-
     const channel = supabase
       .channel("notifications")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications" },
         (payload) => {
-          console.log("Nouvelle notification reçue :", payload)
           setNotifications((prev) => [payload.new as Notification, ...prev])
           if (!(payload.new as Notification).is_read) {
             setUnreadCount((prev) => prev + 1)
@@ -167,12 +117,18 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "notifications" },
         (payload) => {
-          console.log("Mise à jour de notification reçue :", payload)
           setNotifications((prev) =>
             prev.map((n) => (n.id === payload.new.id ? { ...n, ...payload.new } : n))
           )
           setUnreadCount((prev) =>
-            Math.max(0, prev + ((payload.new as Notification).is_read && !(payload.old as Notification).is_read ? -1 : 0))
+            Math.max(
+              0,
+              prev +
+                ((payload.new as Notification).is_read &&
+                !(payload.old as Notification).is_read
+                  ? -1
+                  : 0)
+            )
           )
         }
       )
@@ -180,7 +136,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "notifications" },
         (payload) => {
-          console.log("Suppression de notification reçue :", payload)
           setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id))
           setUnreadCount((prev) =>
             Math.max(0, prev - (!(payload.old as Notification).is_read ? 1 : 0))
@@ -204,7 +159,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         markAllAsRead,
         deleteNotification,
         refetch: fetchNotifications,
-      }}
+      } as NotificationsContextType} // 👉 contournement ici
     >
       {children}
     </NotificationsContext.Provider>

@@ -1,0 +1,20 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'  # Toutes les 2 heures
+  workflow_dispatch:        # Lancement manuel depuis GitHub
+
+jobs:
+  keep_alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -s \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "https://aguxutoxwuejtsbdkogy.supabase.co/rest/v1/"
+          echo "✅ Ping envoyé"
+        env:
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

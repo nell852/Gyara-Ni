@@ -3,52 +3,13 @@
 import { Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/client"
-import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
-export function NotificationBell() {
-  const [unreadCount, setUnreadCount] = useState(0)
+// Le compteur vient de NotificationsProvider (via le header). Pas
+// d'abonnement Realtime ici : le provider en a déjà un sur le canal
+// "notifications", et un second .on() sur ce canal lève une erreur.
+export function NotificationBell({ unreadCount }: { unreadCount: number }) {
   const router = useRouter()
-  const supabase = createClient()
-
-  useEffect(() => {
-    fetchUnreadCount()
-
-    // Subscribe to real-time notifications
-    const channel = supabase
-      .channel("notifications")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-        },
-        () => {
-          fetchUnreadCount()
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
-  const fetchUnreadCount = async () => {
-    try {
-      // Compter toutes les notifications non lues
-      const { count: totalUnreadCount } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("is_read", false)
-
-      setUnreadCount(totalUnreadCount || 0)
-    } catch (error) {
-      console.error("Error fetching unread count:", error)
-    }
-  }
 
   return (
     <Button 

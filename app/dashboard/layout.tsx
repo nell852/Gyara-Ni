@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { SidebarProvider, Sidebar, SidebarInset } from "@/components/ui/sidebar"
+import { NotificationsProvider } from "@/hooks/use-notifications"
 
 export default async function DashboardLayout({
   children,
@@ -44,20 +45,22 @@ export default async function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <Sidebar>
-          <DashboardSidebar userRole={profile.role} />
-        </Sidebar>
-        <SidebarInset className="flex-1">
-          <DashboardHeader user={profile} />
-          <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8">
-            <div className="container mx-auto px-0 sm:px-2 lg:px-4">
-              {children}
-            </div>
-          </main>
-        </SidebarInset>
-      </div>
-    </SidebarProvider>
+    <NotificationsProvider>
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
+          <Sidebar>
+            <DashboardSidebar userRole={profile.role} />
+          </Sidebar>
+          <SidebarInset className="flex-1">
+            <DashboardHeader user={profile} />
+            <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-8">
+              <div className="container mx-auto px-0 sm:px-2 lg:px-4">
+                {children}
+              </div>
+            </main>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    </NotificationsProvider>
   )
 }
